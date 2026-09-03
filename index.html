@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Gradebook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #efeae0;
+    --paper-white: #fbf9f4;
+    --paper-line: #c9d3e3;
+    --ink: #23283a;
+    --ink-soft: #565f78;
+    --pen-red: #a93226;
+    --folder-tan: #c9a063;
+    --good: #4b6b4f;
+    --amber: #8a7a2c;
+  }
+  *{box-sizing:border-box;}
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important;}
+  }
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image: linear-gradient(var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 2.1em;
+    background-position: 0 9.6em;
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width:780px; margin:0 auto; padding:2.5rem 1.5rem 5rem; }
+  :focus-visible{ outline:2px solid var(--pen-red); outline-offset:2px; }
+
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:2px solid var(--ink); padding-bottom:0.9rem; margin-bottom:0.3rem;
+    flex-wrap:wrap; gap:1rem;
+  }
+  h1{ font-family:'Spectral', serif; font-weight:600; font-size:2.05rem; margin:0; letter-spacing:0.2px; }
+  h1 span{ display:block; font-size:0.75rem; font-weight:400; color:var(--ink-soft); font-family:'IBM Plex Sans', sans-serif; margin-top:0.2rem; }
+  .overall{ text-align:right; display:flex; align-items:baseline; gap:0.55rem; }
+  .overall .num{ font-family:'Spectral', serif; font-size:2.5rem; font-weight:700; line-height:1; color:var(--pen-red); }
+  .overall .grade{
+    font-family:'Spectral', serif; font-size:0.95rem; font-weight:600;
+    color:var(--ink-soft); border:1.5px solid var(--paper-line); border-radius:4px;
+    padding:0.12rem 0.4rem;
+  }
+  .overall .lbl{ font-size:0.78rem; color:var(--ink-soft); width:100%; }
+  .overall-row{ display:flex; flex-direction:column; align-items:flex-end; gap:0.15rem; }
+
+  .statusbar{
+    display:flex; align-items:center; gap:0.5rem;
+    margin:0.8rem 0 1.6rem;
+    font-size:0.78rem; color:var(--ink-soft);
+  }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-soft); flex-shrink:0; transition:background 0.25s ease; }
+  .dot.online{ background:var(--good); }
+  .dot.offline{ background:var(--pen-red); }
+  .dot.syncing{ background:var(--amber); animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  /* Add-entry index card */
+  .addcard{
+    position:relative;
+    background:var(--paper-white); border:1px solid var(--paper-line);
+    padding:1.4rem 1.5rem 1.3rem;
+    margin:0 0 2.4rem;
+    transform:rotate(-0.4deg);
+    box-shadow: 0 6px 14px -8px rgba(35,40,58,0.28);
+    transition: transform 0.2s ease;
+  }
+  .addcard:focus-within{ transform:rotate(0deg); }
+  .addcard::before{
+    content:''; position:absolute; top:-6px; left:28px; width:11px; height:11px;
+    border-radius:50%; background:var(--pen-red);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.35), inset 0 -2px 2px rgba(0,0,0,0.2);
+  }
+  .addcard h2{ font-family:'Spectral', serif; font-size:1.05rem; font-weight:600; margin:0 0 1.05rem; }
+  .fields{ display:grid; grid-template-columns: 1.3fr 1.3fr 1.5fr 0.8fr 0.2fr 0.8fr; gap:0.7rem; align-items:end; }
+  .field{ display:flex; flex-direction:column; gap:0.3rem; }
+  .field label{ font-size:0.72rem; color:var(--ink-soft); }
+  .field input, .field select{
+    font-family:'IBM Plex Sans', sans-serif; font-size:0.92rem; padding:0.48rem 0.55rem;
+    border:1px solid var(--paper-line); background:#fff; color:var(--ink); border-radius:3px;
+    transition: border-color 0.15s ease;
+  }
+  .field input:focus, .field select:focus{ outline:none; border-color:var(--pen-red); }
+  .slash{ text-align:center; padding-bottom:0.6rem; color:var(--ink-soft); }
+  .addbtn{
+    grid-column: 1 / -1; justify-self:start; margin-top:0.5rem;
+    background:var(--ink); color:var(--paper-white); border:none; padding:0.58rem 1.3rem;
+    font-family:'IBM Plex Sans', sans-serif; font-size:0.88rem; font-weight:500; cursor:pointer; border-radius:3px;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .addbtn:hover{ background:var(--pen-red); }
+  .addbtn:active{ transform:scale(0.97); }
+  .err{ grid-column:1/-1; color:var(--pen-red); font-size:0.8rem; display:none; }
+
+  /* Subject folder tabs */
+  .tabs{ display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:0; padding-left:0.1rem; }
+  .tab{
+    position:relative;
+    display:flex; flex-direction:column; align-items:flex-start; gap:0.15rem;
+    padding:0.45rem 0.85rem 0.4rem; min-width:64px;
+    background:var(--paper-white); border:1px solid var(--paper-line); border-bottom:none;
+    border-radius:5px 5px 0 0; cursor:pointer;
+    transition: background 0.15s ease;
+  }
+  .tab::before{
+    content:''; position:absolute; top:-1px; left:-1px; right:-1px; height:3px;
+    background:var(--subj-color, var(--paper-line)); border-radius:5px 5px 0 0;
+  }
+  .tab .tabname{ font-size:0.78rem; font-weight:600; color:var(--ink); }
+  .tab .tabavg{ font-size:0.68rem; color:var(--ink-soft); }
+  .tab.active{ background:#fff; }
+  .tab.active .tabname{ color:var(--subj-color, var(--ink)); }
+  .tab:hover{ background:#fff; }
+  .tabrow-underline{ height:2px; background:var(--ink); margin-bottom:1.1rem; }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead th{
+    text-align:left; font-size:0.72rem; font-weight:500; color:var(--ink-soft);
+    padding:0.3rem 0.5rem 0.5rem; border-bottom:2px solid var(--ink);
+  }
+  thead th.num, td.num{ text-align:right; }
+  thead th.sortable{ cursor:pointer; user-select:none; }
+  thead th.sortable:hover{ color:var(--ink); }
+  thead th .arrow{ font-size:0.62rem; margin-left:3px; opacity:0.55; }
+  tbody td{ padding:0.62rem 0.5rem; font-size:0.9rem; border-bottom:1px solid var(--paper-line); vertical-align:middle; }
+  tbody tr{ transition: opacity 0.2s ease, transform 0.2s ease; }
+  tbody tr:hover{ background:rgba(255,255,255,0.55); }
+  tbody tr.new-row{ animation: rowIn 0.4s ease; }
+  tbody tr.removing{ opacity:0; transform:translateX(6px); }
+  @keyframes rowIn{ from{ opacity:0; transform:translateY(-5px); background:rgba(169,50,38,0.08); } to{ opacity:1; transform:translateY(0); } }
+
+  .subj-chip{
+    display:inline-flex; align-items:center; gap:0.4rem;
+    font-size:0.72rem; padding:0.14rem 0.55rem 0.14rem 0.4rem;
+    border:1px solid var(--subj-color, var(--folder-tan)); color:var(--ink); border-radius:3px;
+    white-space:nowrap;
+  }
+  .subj-chip::before{
+    content:''; width:7px; height:7px; border-radius:50%; background:var(--subj-color, var(--folder-tan)); flex-shrink:0;
+  }
+  .score{ font-family:'Spectral', serif; font-weight:600; }
+  .pct{ font-weight:600; }
+  .pct.low{ color:var(--pen-red); }
+  .pct.mid{ color:var(--amber); }
+  .pct.high{ color:var(--good); }
+  .pending-flag{
+    display:inline-block; margin-left:0.4rem; width:6px; height:6px; border-radius:50%;
+    background:var(--amber); vertical-align:middle;
+  }
+  .del{
+    background:none; border:none; color:var(--ink-soft); cursor:pointer; font-size:0.85rem; padding:0.15rem 0.4rem;
+    border-radius:3px; transition: color 0.15s ease, background 0.15s ease;
+  }
+  .del:hover{ color:var(--pen-red); background:rgba(169,50,38,0.08); }
+
+  .empty{ padding:2.6rem 0.5rem; text-align:center; color:var(--ink-soft); font-size:0.9rem; }
+  .empty svg{ display:block; margin:0 auto 0.8rem; width:64px; height:64px; opacity:0.65; }
+  .loading{ padding:2rem 0.5rem; text-align:center; color:var(--ink-soft); font-size:0.85rem; }
+
+  @media (max-width:640px){
+    .fields{ grid-template-columns: 1fr 1fr; }
+    .slash{ display:none; }
+    .overall-row{ align-items:flex-start; }
+    .overall{ text-align:left; }
+    header{ flex-direction:column; align-items:flex-start; }
+    table, thead, tbody, tr, td, th{ display:block; }
+    thead{ display:none; }
+    tbody tr{
+      border:1px solid var(--paper-line); border-left:4px solid var(--row-color, var(--folder-tan));
+      border-radius:3px; padding:0.6rem 0.7rem; margin-bottom:0.6rem; background:var(--paper-white);
+    }
+    tbody td{ border:none; padding:0.16rem 0; display:flex; justify-content:space-between; }
+    tbody td.num{ text-align:left; }
+    tbody td::before{ content: attr(data-label); color:var(--ink-soft); font-size:0.72rem; }
+    td.actioncell{ justify-content:flex-end; }
+    td.actioncell::before{ content:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>My Gradebook<span>works offline · syncs automatically when you're back online</span></h1>
+    <div class="overall-row">
+      <div class="overall">
+        <span class="num" id="overallNum">—</span>
+        <span class="grade" id="overallGrade" style="display:none;"></span>
+      </div>
+      <span class="lbl" id="overallLbl">overall average</span>
+    </div>
+  </header>
+
+  <div class="statusbar">
+    <span class="dot offline" id="statusDot"></span>
+    <span id="statusText">Checking connection…</span>
+  </div>
+
+  <div class="addcard">
+    <h2>Add an entry</h2>
+    <div class="fields">
+      <div class="field">
+        <label for="f-subject">Subject</label>
+        <input id="f-subject" list="subjectList" placeholder="e.g. Philosophy" autocomplete="off">
+        <datalist id="subjectList"></datalist>
+      </div>
+      <div class="field">
+        <label for="f-type">Type</label>
+        <input id="f-type" list="typeList" placeholder="e.g. Quiz, Homework" autocomplete="off">
+        <datalist id="typeList"></datalist>
+      </div>
+      <div class="field">
+        <label for="f-date">Date</label>
+        <input id="f-date" type="date">
+      </div>
+      <div class="field">
+        <label for="f-score">Score</label>
+        <input id="f-score" type="number" step="any" placeholder="18">
+      </div>
+      <div class="slash">/</div>
+      <div class="field">
+        <label for="f-total">Total</label>
+        <input id="f-total" type="number" step="any" placeholder="20">
+      </div>
+      <div class="err" id="formErr">Fill in subject, type, date, score, and total.</div>
+      <button class="addbtn" id="addBtn">Add to gradebook</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="tabrow-underline"></div>
+
+  <div id="tableHolder">
+    <div class="loading">Loading your gradebook…</div>
+  </div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+// ---- Your Firebase project ----
+const firebaseConfig = {
+  apiKey: "AIzaSyCXvjG2kdBUs8DJ3JIF0h5RxmUDKqHKb5Y",
+  authDomain: "grader-b4300.firebaseapp.com",
+  projectId: "grader-b4300",
+  storageBucket: "grader-b4300.firebasestorage.app",
+  messagingSenderId: "216186023274",
+  appId: "1:216186023274:web:61b3df4ce2e2903cc48913"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const COLLECTION = "schoolwork";
+
+// ---------------------------------------------------------------
+// Local offline store (IndexedDB) — this is the source of truth
+// the UI reads from. Firestore is synced to/from it in the background.
+// ---------------------------------------------------------------
+const DB_NAME = "gradebookLocalDB";
+const STORE = "entries";
+
+function openLocalDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const idb = e.target.result;
+      if(!idb.objectStoreNames.contains(STORE)){
+        idb.createObjectStore(STORE, { keyPath: "id" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function localGetAll(){
+  const idb = await openLocalDB();
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function localPut(entry){
+  const idb = await openLocalDB();
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(entry);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function localDelete(id){
+  const idb = await openLocalDB();
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ---------------------------------------------------------------
+// App state
+// ---------------------------------------------------------------
+let entries = [];
+let activeSubject = "All";
+let loaded = false;
+let authedUser = null;
+let unsubscribeRemote = null;
+let sortKey = "date";
+let sortDir = "desc";
+let lastAddedId = null;
+
+const $ = (id) => document.getElementById(id);
+const uid = () => "e" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+const SUBJECT_PALETTE = ["#b5654a","#5f7a52","#4a6b8a","#7a5a7a","#b58a3a","#3f7a72","#9a5f6b","#6b7a3f"];
+function subjectColor(subject){
+  let hash = 0;
+  for(let i=0;i<subject.length;i++) hash = (hash * 31 + subject.charCodeAt(i)) >>> 0;
+  return SUBJECT_PALETTE[hash % SUBJECT_PALETTE.length];
+}
+function letterGrade(p){
+  if(p>=97) return "A+"; if(p>=93) return "A"; if(p>=90) return "A-";
+  if(p>=87) return "B+"; if(p>=83) return "B"; if(p>=80) return "B-";
+  if(p>=77) return "C+"; if(p>=73) return "C"; if(p>=70) return "C-";
+  if(p>=67) return "D+"; if(p>=63) return "D"; if(p>=60) return "D-";
+  return "F";
+}
+
+function setStatus(state, text){
+  $("statusDot").className = "dot " + state;
+  $("statusText").textContent = text;
+}
+function pendingCount(){
+  return entries.filter(e => e.syncStatus === "pending" || e.syncStatus === "pending-delete").length;
+}
+function refreshStatus(){
+  const p = pendingCount();
+  if(!navigator.onLine){
+    setStatus("offline", p > 0 ? `Offline — ${p} waiting to sync` : "Offline — saved on this device");
+  } else if(p > 0){
+    setStatus("syncing", `Online — syncing ${p} ${p===1?"entry":"entries"}…`);
+  } else {
+    setStatus("online", "Online — all synced");
+  }
+}
+
+// ---------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function pctOf(score, total){ return total ? (score/total)*100 : 0; }
+function pctClass(p){ if(p < 70) return "low"; if(p < 85) return "mid"; return "high"; }
+function formatDate(d){
+  if(!d) return "";
+  const dt = new Date(d + "T00:00:00");
+  return isNaN(dt) ? d : dt.toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"});
+}
+function visibleEntries(){ return entries.filter(e => e.syncStatus !== "pending-delete"); }
+function uniqueSubjects(){ return Array.from(new Set(visibleEntries().map(e => e.subject))).sort((a,b)=>a.localeCompare(b)); }
+function avgForSubject(subject){
+  const list = visibleEntries().filter(e => e.subject === subject);
+  const s = list.reduce((sum,e)=>sum+Number(e.score),0);
+  const t = list.reduce((sum,e)=>sum+Number(e.total),0);
+  return pctOf(s,t);
+}
+function renderDatalists(){
+  const subjects = uniqueSubjects();
+  const types = Array.from(new Set(visibleEntries().map(e => e.type))).sort((a,b)=>a.localeCompare(b));
+  $("subjectList").innerHTML = subjects.map(s => `<option value="${escapeHtml(s)}">`).join("");
+  $("typeList").innerHTML = types.map(t => `<option value="${escapeHtml(t)}">`).join("");
+}
+function renderTabs(){
+  const subjects = uniqueSubjects();
+  const all = ["All", ...subjects];
+  if(!all.includes(activeSubject)) activeSubject = "All";
+  $("tabs").innerHTML = all.map(s => {
+    const color = s === "All" ? "var(--ink)" : subjectColor(s);
+    const sub = s === "All"
+      ? `${visibleEntries().length} total`
+      : `${avgForSubject(s).toFixed(0)}%`;
+    return `<button class="tab ${s===activeSubject?"active":""}" data-subject="${escapeHtml(s)}" style="--subj-color:${color}">
+      <span class="tabname">${escapeHtml(s)}</span>
+      <span class="tabavg">${sub}</span>
+    </button>`;
+  }).join("");
+  $("tabs").querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => { activeSubject = btn.dataset.subject; render(); });
+  });
+}
+function renderOverall(filtered){
+  if(filtered.length === 0){
+    $("overallNum").textContent = "—";
+    $("overallGrade").style.display = "none";
+    $("overallLbl").textContent = "overall average";
+    return;
+  }
+  const totalScore = filtered.reduce((s,e)=>s+Number(e.score),0);
+  const totalTotal = filtered.reduce((s,e)=>s+Number(e.total),0);
+  const pct = pctOf(totalScore, totalTotal);
+  $("overallNum").textContent = pct.toFixed(1) + "%";
+  $("overallGrade").textContent = letterGrade(pct);
+  $("overallGrade").style.display = "inline-block";
+  $("overallLbl").textContent = (activeSubject === "All" ? "overall average" : activeSubject + " average")
+    + ` · ${filtered.length} ${filtered.length===1?"entry":"entries"}`;
+}
+function sortedRows(filtered){
+  const arr = [...filtered];
+  arr.sort((a,b) => {
+    let av, bv;
+    if(sortKey === "score"){ av = pctOf(a.score,a.total); bv = pctOf(b.score,b.total); }
+    else { av = a.date || ""; bv = b.date || ""; }
+    if(av < bv) return sortDir === "asc" ? -1 : 1;
+    if(av > bv) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+  return arr;
+}
+function arrowFor(key){
+  if(sortKey !== key) return "";
+  return `<span class="arrow">${sortDir === "asc" ? "▲" : "▼"}</span>`;
+}
+function emptyIllustration(){
+  return `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="8" width="38" height="50" rx="2" stroke="currentColor" stroke-width="2"/>
+    <line x1="17" y1="20" x2="41" y2="20" stroke="currentColor" stroke-width="2"/>
+    <line x1="17" y1="28" x2="41" y2="28" stroke="currentColor" stroke-width="2"/>
+    <line x1="17" y1="36" x2="32" y2="36" stroke="currentColor" stroke-width="2"/>
+    <path d="M40 40 L54 26 L58 30 L44 44 L38 46 Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+  </svg>`;
+}
+function renderTable(filtered){
+  const holder = $("tableHolder");
+  if(!loaded){ holder.innerHTML = '<div class="loading">Loading your gradebook…</div>'; return; }
+  if(filtered.length === 0){
+    holder.innerHTML = `<div class="empty">${emptyIllustration()}${
+      visibleEntries().length === 0
+        ? "Nothing logged yet. Add your first assignment above."
+        : "No entries for this subject yet."
+    }</div>`;
+    return;
+  }
+  const sorted = sortedRows(filtered);
+  const rows = sorted.map(e => {
+    const p = pctOf(e.score, e.total);
+    const color = subjectColor(e.subject);
+    const pendingFlag = e.syncStatus === "pending" ? '<span class="pending-flag" title="Not yet synced"></span>' : "";
+    const isNew = e.id === lastAddedId ? " new-row" : "";
+    return `<tr data-id="${e.id}" class="${isNew.trim()}" style="--row-color:${color}">
+      <td data-label="Date">${escapeHtml(formatDate(e.date))}${pendingFlag}</td>
+      <td data-label="Subject"><span class="subj-chip" style="--subj-color:${color}">${escapeHtml(e.subject)}</span></td>
+      <td data-label="Type">${escapeHtml(e.type)}</td>
+      <td class="num" data-label="Score"><span class="score">${e.score}</span> / ${e.total}</td>
+      <td class="num" data-label="%"><span class="pct ${pctClass(p)}">${p.toFixed(1)}%</span></td>
+      <td class="num actioncell"><button class="del" data-id="${e.id}" title="Delete entry">remove</button></td>
+    </tr>`;
+  }).join("");
+  holder.innerHTML = `<table>
+    <thead><tr>
+      <th class="sortable" data-sort="date">Date${arrowFor("date")}</th>
+      <th>Subject</th>
+      <th>Type</th>
+      <th class="num">Score</th>
+      <th class="num sortable" data-sort="score">%${arrowFor("score")}</th>
+      <th class="num"></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+  holder.querySelectorAll(".del").forEach(btn => btn.addEventListener("click", () => handleDeleteClick(btn.dataset.id)));
+  holder.querySelectorAll("th.sortable").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if(sortKey === key) sortDir = sortDir === "asc" ? "desc" : "asc";
+      else { sortKey = key; sortDir = key === "date" ? "desc" : "desc"; }
+      render();
+    });
+  });
+  if(lastAddedId){
+    const justAdded = lastAddedId;
+    lastAddedId = null;
+    setTimeout(() => {
+      const row = holder.querySelector(`tr[data-id="${justAdded}"]`);
+      if(row) row.classList.remove("new-row");
+    }, 500);
+  }
+}
+function render(){
+  renderDatalists();
+  renderTabs();
+  const vis = visibleEntries();
+  const filtered = activeSubject === "All" ? vis : vis.filter(e => e.subject === activeSubject);
+  renderOverall(filtered);
+  renderTable(filtered);
+  refreshStatus();
+}
+
+// ---------------------------------------------------------------
+// Local mutations — always write to IndexedDB first so the app
+// works fully offline, then try to sync.
+// ---------------------------------------------------------------
+async function loadFromLocal(){
+  entries = await localGetAll();
+  loaded = true;
+  render();
+}
+
+async function addEntry(){
+  const subject = $("f-subject").value.trim();
+  const type = $("f-type").value.trim();
+  const date = $("f-date").value;
+  const score = $("f-score").value;
+  const total = $("f-total").value;
+
+  if(!subject || !type || !date || score === "" || total === "" || Number(total) <= 0){
+    $("formErr").style.display = "block";
+    return;
+  }
+  $("formErr").style.display = "none";
+
+  const entry = {
+    id: uid(), subject, type, date,
+    score: Number(score), total: Number(total),
+    updatedAt: Date.now(),
+    syncStatus: "pending"
+  };
+  entries.push(entry);
+  await localPut(entry);
+
+  $("f-subject").value = ""; $("f-type").value = ""; $("f-date").value = "";
+  $("f-score").value = ""; $("f-total").value = "";
+
+  activeSubject = subject;
+  sortKey = "date"; sortDir = "desc";
+  lastAddedId = entry.id;
+  render();
+  trySync();
+}
+
+function handleDeleteClick(id){
+  const holder = $("tableHolder");
+  const row = holder.querySelector(`tr[data-id="${id}"]`);
+  if(row){
+    row.classList.add("removing");
+    setTimeout(() => deleteEntry(id), 190);
+  } else {
+    deleteEntry(id);
+  }
+}
+
+async function deleteEntry(id){
+  const e = entries.find(x => x.id === id);
+  if(!e) return;
+  if(e.syncStatus === "synced"){
+    e.syncStatus = "pending-delete";
+    await localPut(e);
+  } else {
+    entries = entries.filter(x => x.id !== id);
+    await localDelete(id);
+  }
+  render();
+  trySync();
+}
+
+// ---------------------------------------------------------------
+// Sync with Firestore
+// ---------------------------------------------------------------
+let syncing = false;
+async function trySync(){
+  if(!navigator.onLine || !authedUser || syncing) { refreshStatus(); return; }
+  syncing = true;
+  refreshStatus();
+  try{
+    const toPush = entries.filter(e => e.syncStatus === "pending");
+    for(const e of toPush){
+      await setDoc(doc(db, COLLECTION, e.id), {
+        subject: e.subject, type: e.type, date: e.date,
+        score: e.score, total: e.total, updatedAt: e.updatedAt
+      });
+      e.syncStatus = "synced";
+      await localPut(e);
+    }
+    const toDelete = entries.filter(e => e.syncStatus === "pending-delete");
+    for(const e of toDelete){
+      await deleteDoc(doc(db, COLLECTION, e.id));
+      entries = entries.filter(x => x.id !== e.id);
+      await localDelete(e.id);
+    }
+  } catch(err){
+    console.error("Sync error", err);
+  } finally {
+    syncing = false;
+    render();
+  }
+}
+
+function startRemoteListener(){
+  if(unsubscribeRemote) return;
+  unsubscribeRemote = onSnapshot(collection(db, COLLECTION), async (snap) => {
+    let changed = false;
+    for(const change of snap.docChanges()){
+      const id = change.doc.id;
+      const local = entries.find(e => e.id === id);
+      if(change.type === "removed"){
+        if(local && local.syncStatus !== "pending"){
+          entries = entries.filter(e => e.id !== id);
+          await localDelete(id);
+          changed = true;
+        }
+        continue;
+      }
+      if(local && (local.syncStatus === "pending" || local.syncStatus === "pending-delete")) continue;
+      const d = change.doc.data();
+      const merged = {
+        id, subject: d.subject, type: d.type, date: d.date,
+        score: d.score, total: d.total, updatedAt: d.updatedAt || Date.now(),
+        syncStatus: "synced"
+      };
+      await localPut(merged);
+      const idx = entries.findIndex(e => e.id === id);
+      if(idx >= 0) entries[idx] = merged; else entries.push(merged);
+      changed = true;
+    }
+    if(changed) render();
+  }, (err) => console.error("Remote listener error", err));
+}
+
+// ---------------------------------------------------------------
+// Connectivity + auth wiring
+// ---------------------------------------------------------------
+window.addEventListener("online", () => { refreshStatus(); trySync(); });
+window.addEventListener("offline", refreshStatus);
+
+onAuthStateChanged(auth, (user) => {
+  authedUser = user;
+  if(user){
+    startRemoteListener();
+    trySync();
+  }
+});
+signInAnonymously(auth).catch((err) => {
+  console.error("Anonymous sign-in failed", err);
+  setStatus("offline", "Signed out — working offline only");
+});
+
+$("addBtn").addEventListener("click", addEntry);
+document.addEventListener("keydown", (e) => {
+  if(e.key === "Enter" && document.activeElement && document.activeElement.closest(".fields")) addEntry();
+});
+$("f-date").value = new Date().toISOString().slice(0,10);
+
+loadFromLocal();
+refreshStatus();
+</script>
+</body>
+</html>
