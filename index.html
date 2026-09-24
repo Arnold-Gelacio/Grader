@@ -43,7 +43,7 @@ dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);colo
     <input type="hidden" id="id">
     <div><label>Date</label><input type="date" id="date" required></div>
     <div><label>Subject</label><input id="subject" list="subs" placeholder="e.g. Math" required><datalist id="subs"></datalist></div>
-    <div><label>Type</label><select id="type"><option>Activity</option><option>Assignment</option><option>Quiz</option><option>Exam</option><option>Project</option><option>Recitation</option><option>Other</option></select></div>
+    <div><label>Type</label><input id="type" list="types" placeholder="e.g. Quiz" required><datalist id="types"></datalist></div>
     <div><label>Title</label><input id="title" placeholder="Optional"></div>
     <div><label>Score</label><input type="number" id="score" step="any" min="0" required></div>
     <div><label>Total items</label><input type="number" id="total" step="any" min="1" required></div>
@@ -57,7 +57,7 @@ dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);colo
   <div class="filters">
     <input id="q" placeholder="Search title…">
     <select id="fs"><option value="">All subjects</option></select>
-    <select id="ft"><option value="">All types</option><option>Activity</option><option>Assignment</option><option>Quiz</option><option>Exam</option><option>Project</option><option>Recitation</option><option>Other</option></select>
+    <select id="ft"><option value="">All types</option></select>
   </div>
   <div class="tw" style="margin-top:10px"><table>
     <thead><tr><th>Date</th><th>Subject</th><th>Type</th><th>Title</th><th>Score</th><th>%</th><th></th></tr></thead>
@@ -68,7 +68,9 @@ dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);colo
 
 <dialog id="dlg">
   <h3 style="margin-top:0">Firebase settings</h3>
-  <p style="color:var(--mu);font-size:13px">Your project (<code>grader-b4300</code>) is built in. To switch projects, paste another <code>firebaseConfig</code> as JSON; leave empty to go back to the built-in one. Data is stored in the <code>grades</code> collection.</p>
+  <p style="color:var(--mu);font-size:13px">Your project (<code>grader-b4300</code>) is built in. To switch projects, paste another <code>firebaseConfig</code> as JSON; leave empty to go back to the built-in one. Current collection: <code>schoolwork</code> by default.</p>
+  <label>Firestore collection name</label>
+  <input id="col" placeholder="schoolwork" style="margin-bottom:10px">
   <textarea id="cfg" rows="8" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","appId":"..."}'></textarea>
   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
     <button class="g" id="cfgCancel">Close</button><button id="cfgSave">Save & reload</button>
@@ -92,21 +94,36 @@ const firebaseConfig = {
   appId: "1:216186023274:web:61b3df4ce2e2903cc48913"
 };
 let cfg=firebaseConfig;try{cfg=JSON.parse(localStorage.getItem('fbcfg')||'null')||firebaseConfig}catch(e){}
+const COL=localStorage.getItem('fbcol')||'schoolwork';
+const pick=(d,ks)=>{for(const k of ks)if(d[k]!==undefined&&d[k]!==null&&d[k]!=='')return d[k]};
+// Maps whatever field names your existing documents use onto the fields this app expects
+function norm(id,d){
+  let dt=pick(d,['date','dueDate','createdAt','timestamp','day'])??'';
+  if(dt&&dt.toDate)dt=dt.toDate().toISOString().slice(0,10);
+  else if(typeof dt==='number')dt=new Date(dt).toISOString().slice(0,10);
+  else dt=String(dt).slice(0,10);
+  return{id,date:dt,
+    subject:pick(d,['subject','course','class'])||'—',
+    type:pick(d,['type','category','kind'])||'Other',
+    title:pick(d,['title','name','activity','description'])||'',
+    score:+pick(d,['score','points','grade','earned'])||0,
+    total:+pick(d,['total','totalItems','items','max','maxScore','perfect','outOf'])||1};
+}
 let store;
 if(cfg&&cfg.projectId&&window.firebase){
   firebase.initializeApp(cfg);
   const db=firebase.firestore();
   db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
-  const col=db.collection('grades');
+  const col=db.collection(COL);
   store={
     name:'Firebase (offline sync on)',
-    listen(cb){col.orderBy('date','desc').onSnapshot(s=>{
-      cb(s.docs.map(d=>({id:d.id,...d.data()})));
+    listen(cb){col.onSnapshot(s=>{
+      cb(s.docs.map(d=>norm(d.id,d.data())).sort((a,b)=>String(b.date).localeCompare(String(a.date))));
       $('mode').textContent=s.metadata.hasPendingWrites?'Firebase · pending sync':s.metadata.fromCache?'Firebase · cached':'Firebase · synced';
     },e=>{$('mode').textContent='Firebase error: '+e.code})},
     // not awaited: Firestore queues the write and syncs when back online
     add(o){col.add(o).catch(console.error)},
-    update(id,o){col.doc(id).set(o).catch(console.error)},
+    update(id,o){col.doc(id).set(o,{merge:true}).catch(console.error)},
     remove(id){col.doc(id).delete().catch(console.error)}
   };
 }else{
@@ -126,6 +143,10 @@ const pct=r=>r.total?Math.round(r.score/r.total*1000)/10:0;
 function render(){
   const subs=[...new Set(rows.map(r=>r.subject))].sort();
   $('subs').innerHTML=subs.map(s=>`<option value="${esc(s)}">`).join('');
+  const types=[...new Set(['Activity','Assignment','Quiz','Exam','Project','Recitation',...rows.map(r=>r.type)])];
+  $('types').innerHTML=types.map(t=>`<option value="${esc(t)}">`).join('');
+  const ct=$('ft').value,used=[...new Set(rows.map(r=>r.type))].sort();
+  $('ft').innerHTML='<option value="">All types</option>'+used.map(t=>`<option ${t===ct?'selected':''}>${esc(t)}</option>`).join('');
   const cur=$('fs').value;
   $('fs').innerHTML='<option value="">All subjects</option>'+subs.map(s=>`<option ${s===cur?'selected':''}>${esc(s)}</option>`).join('');
   const q=$('q').value.toLowerCase(),fs=$('fs').value,ft=$('ft').value;
@@ -148,7 +169,7 @@ function reset(){$('f').reset();$('id').value='';$('save').textContent='Add';$('
 $('cancel').onclick=reset;
 $('f').onsubmit=e=>{
   e.preventDefault();
-  const o={date:$('date').value,subject:$('subject').value.trim(),type:$('type').value,title:$('title').value.trim(),score:+$('score').value,total:+$('total').value};
+  const o={date:$('date').value,subject:$('subject').value.trim(),type:$('type').value.trim(),title:$('title').value.trim(),score:+$('score').value,total:+$('total').value,updatedAt:Date.now()};
   const id=$('id').value;id?store.update(id,o):store.add(o);reset();
 };
 ['q','fs','ft'].forEach(i=>$(i).oninput=render);
@@ -156,10 +177,11 @@ $('f').onsubmit=e=>{
 function net(){const on=navigator.onLine;$('net').textContent=on?'Online':'Offline';$('net').className='badge '+(on?'on':'off')}
 addEventListener('online',net);addEventListener('offline',net);net();
 
-$('cfgBtn').onclick=()=>{$('cfg').value=cfg?JSON.stringify(cfg,null,2):'';$('dlg').showModal()};
+$('cfgBtn').onclick=()=>{$('col').value=COL;$('cfg').value=cfg?JSON.stringify(cfg,null,2):'';$('dlg').showModal()};
 $('cfgCancel').onclick=()=>$('dlg').close();
 $('cfgSave').onclick=()=>{
   const v=$('cfg').value.trim();
+  localStorage.setItem('fbcol',$('col').value.trim()||'schoolwork');
   try{if(v){JSON.parse(v);localStorage.setItem('fbcfg',v)}else localStorage.removeItem('fbcfg');location.reload()}
   catch(e){alert('Invalid JSON')}
 };
